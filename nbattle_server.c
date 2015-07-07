@@ -7,45 +7,63 @@
 #include <pthread.h>
 
 #define NUM_THREADS 5
-//struttura informazioni relative ad un thread nel pool
+
+//struttura informazioni relative ad un thread nel s.pool
 struct gestore {
 	pthread_t th;	
 	pthread_cond_t newrequest;
-	pthread_mutex_t lock;
+	int occupato;
 };
+
+
+struct server {
+	//array di varibaili pthread_t di tipo opaco(non sappiamo come è fatto dentro
+	struct gestore pool[NUM_THREADS];	
+	pthread_cond_t gestore_libero; //per aspettare che un thread si liberi
+	pthread_mutex_t main_lock;	
+	};
+
+struct server s; //variabili globale
+
 
 void * gestisci_client(void *arg){
 	
 	struct gestore* g=arg;
 	for(;;){
 //prendo il lock per utilizzare la variabile codition
-		pthread_mutex_lock(&g->lock);
+		pthread_mutex_lock(&s.main_lock);
 //aspetta che arrivi l segnale nel frattempo si blocca rilasciano il lock
-		pthread_cond_wait(&g->newrequest,&g->lock);
-		pthread_mutex_unlock(&g->lock);
-		printf("Ho gestito la connessione\n");	
+		if(!g->occupato){
+			pthread_cond_wait(&g->newrequest,&s.main_lock);
+		}
+		pthread_mutex_unlock(&s.main_lock);
+		printf("Ho gestito la connessione\n");
+		usleep(5000000);
+		pthread_mutex_lock(&s.main_lock);
+		g->occupato=0;
+	//sveglio, dato che nn sono piu occupato, il main
+		pthread_cond_signal(&s.gestore_libero);
+		pthread_mutex_unlock(&s.main_lock);	
 	};	
 	return NULL;
 }
 
 int main(){
-	//array di varibaili pthread_t di tipo opaco(non sappiamo come è fatto dentro
-	struct gestore pool[NUM_THREADS];	
 	//struct per il bind 
 	struct sockaddr_in server_addr;	
 	int lfd; // listening file descriptor per il socket 
 	int err;
 	int i;
-	int curr_thread=0; //thread corrente	
-	
+	pthread_cond_init(&s.gestore_libero, NULL);	
+	pthread_mutex_init(&s.main_lock, NULL);//inizializzo il lock
 	for(i=0; i< NUM_THREADS; i++) {
-		err=pthread_create(&pool[i].th, NULL, gestisci_client, &pool[i]);
+		s.pool[i].occupato=0;
+		err=pthread_create(&s.pool[i].th, NULL, gestisci_client, &s.pool[i]);
 		if (err){
 			perror("phtread_create()");
 			return -1;//xke devo uscire dal programma
 		}
-		pthread_cond_init(&pool[i].newrequest, NULL);
-		pthread_mutex_init(&pool[i].lock, NULL);
+		pthread_cond_init(&s.pool[i].newrequest, NULL);
 	}
 	
 	//lo scopo del sk è di ascoltare connessioni dei client
@@ -80,11 +98,27 @@ int main(){
 			perror("accept()");
 			break;
 		}
-//sveglio il thread i esimo che si era bloccato nella wait
-		pthread_mutex_lock(&pool[curr_thread].lock);
-		pthread_cond_signal (&pool[curr_thread].newrequest);		
-		pthread_mutex_unlock(&pool[curr_thread].lock);
-		curr_thread=(curr_thread+1)%NUM_THREADS;
+
+		pthread_mutex_lock(&s.main_lock);
+//ciclo per il controllo 		
+		for(;;){
+			for(i=0;i<NUM_THREADS;i++){
+				if(!s.pool[i].occupato)
+					break;			
+			}
+			if(i==NUM_THREADS){
+				printf("Tutto occupato...\n");
+				pthread_cond_wait(&s.gestore_libero, &s.main_lock);	
+			}
+			else
+				break;
+		}
+		printf("Selezionato thread %d\n", i);
+		//la variabile i puo valere da 0 a numthreads-1
+		s.pool[i].occupato=1;
+  	//sveglio il thread i esimo che si era bloccato nella wait		
+		pthread_cond_signal (&s.pool[i].newrequest);
+		pthread_mutex_unlock(&s.main_lock);
 	}
 	
 	

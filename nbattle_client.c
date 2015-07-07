@@ -9,16 +9,17 @@ int main(){
 	
 	//struct per il bind 
 	struct sockaddr_in server_addr;	
-	int fd; // file descriptor per il socket locale che servirà per connettersi e parlare col server 
+	int fd; // file descriptor per il socket locale che servirà per connettersi e parlare col server.
 	int err;	
 	//lo scopo del sk è di ascoltare connessioni dei client
 	fd=socket (AF_INET, SOCK_STREAM,0);
 	if (fd<0){
-		perror("socket()");
-		return -1;//xke devo uscire dal programma
+		perror("socket()");//mi dà -1 se c'è errore
+		return -1;//xke devo uscire dal programma xke non ha senso coninuare
 	}
 	server_addr.sin_addr.s_addr= INADDR_ANY;
 	server_addr.sin_family=AF_INET;
+//dichiaro la porta dove devo collegarmi
 	server_addr.sin_port= htons(5555);
 		
 	err=connect(fd, (struct sockaddr*)&server_addr, sizeof(server_addr));
