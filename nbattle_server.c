@@ -48,12 +48,37 @@ void * gestisci_client(void *arg){
 	return NULL;
 }
 
-int main(){
+void usage (void){
+	printf("	nbattle_client <host remoto> <porta>\n");
+}
+int main(int argc, char* argv[]){
 	//struct per il bind 
 	struct sockaddr_in server_addr;	
 	int lfd; // listening file descriptor per il socket 
 	int err;
 	int i;
+	int port;
+	//gestione argomenti linea di comando
+	if (argc!=3){
+		printf("Sono richiesti due argomenti\n");
+		usage();
+		return -1;
+	}
+	port=atoi(argv[2]);
+	if (port<=0 || port>65535) {
+		printf ("porta non valida, 1<=port<=65535\n");
+		usage();
+		return -1;	
+}
+		
+	if (inet_pton(AF_INET,argv[1],&server_addr.sin_addr)!=1){
+		printf ("Indirizzo Host remoto non valido\n");
+		usage();
+		return -1;	
+	}
+
+
+
 	pthread_cond_init(&s.gestore_libero, NULL);	
 	pthread_mutex_init(&s.main_lock, NULL);//inizializzo il lock
 	for(i=0; i< NUM_THREADS; i++) {
@@ -74,7 +99,7 @@ int main(){
 	}
 	server_addr.sin_addr.s_addr= INADDR_ANY;
 	server_addr.sin_family=AF_INET;
-	server_addr.sin_port= htons(5555);
+	server_addr.sin_port= htons(port);
 	err=bind(lfd,(struct sockaddr*)&server_addr, sizeof(server_addr));
 	
 	if(err) {
