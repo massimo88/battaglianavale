@@ -18,6 +18,7 @@ struct gestore {
 	pthread_t th;	
 	pthread_cond_t newrequest;
 	int occupato;
+	pthread_mutex_t lock;
 };
 
 
@@ -30,29 +31,103 @@ struct server {
 
 struct server s; //variabili globale
 
+//implementare la funzione dei client connessi
+void server_who(int fd,char* tokens[],int num_tokens,struct gestore*g){
+	int i;
+	int n;
+	int err;
+	char buf[MAX_BUFF_LEN];
+	int left=sizeof(buf);//variabili che tiene i bytes disponibili nel buffer
+	char *cur = buf;
 
+	n=snprintf(cur,left,"Clienti connessi al server:");
+	cur+=n;
+	left-=n;
+//scorri i pool di thread per raccogliere i nomi(username)
+	for(i=0;i<NUM_THREADS && left>0;i++){
+		pthread_mutex_lock (&s.pool[i].lock);
+		n=snprintf(cur,left,"%s ", s.pool[i].username);
+		cur+=n;
+		left-=n;
+		pthread_mutex_unlock (&s.pool[i].lock);
+	}
+//invio la risposta
+	err=send_message(g->fd,buf,MAX_BUFF_LEN-left);
+	if(err){
+		printf("Errore di trasmissione risposta\n");
+		return;
+	}
+}
 
 void gestisci_client_2(struct gestore*g){
 	int n;
 	//legge l'username dal client
+	pthread_mutex_lock (&g->lock);
 	n=read_message(g->fd,g->username,MAX_USERNAME_LEN);		
 	if(n<=0){
 		send_string(g->fd,"Errore durante lettura username");
 		return;
 	}
 	g->username[n]='\0';//metto il terminatore alla stringa username
-	
+	pthread_mutex_unlock (&g->lock);
 	printf("Gestisco la connessione con %s\n",g->username);
 	
 	for(;;){
 		int err;
 		char cmd_buf[MAX_BUFF_LEN];
+		char *tokens[MAX_ARGS+1];//conterrà i token della linea di input, +1 xke l ultima cella deve memorizzare null
+		int k=0; //serve per indicizzare l array token
+		int i;
 		n=read_message(g->fd,cmd_buf,MAX_BUFF_LEN);
 		if(n<=0){
 			send_string(g->fd,"Errore durante lettura username");
 			return;
 		}
 		cmd_buf[n]='\0';
+		
+		tokens[k] = strtok(cmd_buf, " ");
+		while( tokens[k] != NULL ) 
+   		{
+			k++;//memorizzo in ciascuna cella un argomento diverso
+			if(k>=MAX_ARGS){
+				break;
+			}
+			tokens[k] = strtok(NULL, " ");
+   		}
+		
+		printf("letti %d\n", k);
+		for(i=0;i<k;i++){
+			printf("%s\n",tokens[i]);
+		}
+		
+		if(strcmp(tokens[0],"!who")==0){
+			server_who(g->fd,tokens,k,g);			
+		}
+		else if(strcmp(tokens[0],"!create")==0){
+			
+		}
+		else if(strcmp(tokens[0],"!join")==0){
+			
+		}
+		else if(strcmp(tokens[0],"!disconnect")==0){
+			
+		}
+		else if(strcmp(tokens[0],"!quit")==0){
+			
+		}
+		else if(strcmp(tokens[0],"!show_enemy_map")==0){
+			
+		}
+		else if(strcmp(tokens[0],"!show_my_map")==0){
+			
+		}
+		else if(strcmp(tokens[0],"!hit")==0){
+			
+		}
+		else{
+			printf("comando %s non esistente\n",tokens[0]);
+		}
+		
 		printf("%s\n",cmd_buf);
 		err=send_string(g->fd,"xdgdg");
 		if(err){
@@ -130,6 +205,7 @@ int main(int argc, char* argv[]){
 			return -1;//xke devo uscire dal programma
 		}
 		pthread_cond_init(&s.pool[i].newrequest, NULL);
+		pthread_mutex_init(&s.pool[i].lock, NULL);//inizializzo il lock
 	}
 	
 	//lo scopo del sk è di ascoltare connessioni dei client

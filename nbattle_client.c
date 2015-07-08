@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include "nbattle_common.h"
 
-#define MAX_ARGS 3
+
 
 void usage (void){
 	printf("	nbattle_client <host remoto> <porta>\n");
@@ -153,7 +153,6 @@ int main(int argc, char*argv[]){
 			tokens[k] = strtok(NULL, " ");
    		}
 		
-		printf("letti %d\n", k);
 		for(i=0;i<k;i++){
 			printf("%s\n",tokens[i]);
 		}
@@ -174,7 +173,7 @@ int main(int argc, char*argv[]){
 			
 		}
 		else if(strcmp(tokens[0],"!quit")==0){
-			
+			break;
 		}
 		else if(strcmp(tokens[0],"!show_enemy_map")==0){
 			

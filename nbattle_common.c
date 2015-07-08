@@ -41,7 +41,7 @@ int send_message(int fd, void* buff,size_t len){
 		return -1;
 	}
 	l=len;
-	printf("About to send %u bytes\n", l);
+
 	n=write(fd,&l,sizeof(l));
 	if(n!=sizeof(l)){
 		perror("Errore trasmissione lunghezza\n");

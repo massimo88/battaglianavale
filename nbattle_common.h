@@ -11,3 +11,4 @@ int send_string(int fd,char *s);
 int send_message(int fd, void* buff,size_t len);
 
 #define MAX_BUFF_LEN 256
+#define MAX_ARGS 3
