@@ -13,6 +13,42 @@ void usage (void){
 	printf("	nbattle_client <host remoto> <porta>\n");
 }
 
+void print_help(void)
+{
+	printf("Sono disponibili i seguenti comandi:\n"
+"*!help --> mostra l'elenco dei comandi disponibili\n"
+"*!who --> mostra l'elenco dei client connessi al server\n"
+"*!create --> crea una nuova partita e attendi un avversario\n"
+"*!join --> unisciti ad una partita e inizia a giocare\n"
+"*!disconnect --> disconnetti il client dall'attuale partita\n"
+"*!quit --> disconnetti il client dal server\n"
+"*!show_enemy_map --> mostra la mappa dell'avversario\n"
+"*!show_my_map --> mostra la tua mappa\n"
+"* !hit coordinates --> colpisci le coordinate coordinates\n");
+}
+
+void cmd_help(int fd,char* tokens[],int num_tokens){
+	print_help();
+}
+
+void cmd_who(int fd,char* tokens[],int num_tokens){
+	int err;
+	int n;
+	char buff[MAX_BUFF_LEN+1];
+	err=send_string(fd,tokens[0]);
+	if(err){
+		printf("Errore trasmissione comando %s \n",tokens[0]);
+		return;
+	}
+	n=read_message(fd,buff,sizeof(buff));
+	if(n<0){
+		printf("Errore ricezione risposta\n");
+		return;
+	}
+	buff[n]='\0';//mette il terminatore alla stringa del msg ricevuto dal server
+	printf("%s\n",buff);
+}
+
 int get_username(int fd){
 	size_t nchars = 0;
 	char *line = NULL; //stringa che contiene i caratteri della linea
@@ -66,7 +102,7 @@ int main(int argc, char*argv[]){
 	//lo scopo del sk è di ascoltare connessioni dei client
 	fd=socket (AF_INET, SOCK_STREAM,0);
 	if (fd<0){
-		perror("socket()");//mi dà -1 se c'è errore
+		perror("socket()");//mi dà -1 se c'è errore, mi chiama la funzione di libreria del c
 		return -1;//xke devo uscire dal programma xke non ha senso coninuare
 	}
 	server_addr.sin_addr.s_addr= INADDR_ANY;
@@ -79,6 +115,9 @@ int main(int argc, char*argv[]){
 		perror("connect()");
 		return -1;//xke devo uscire dal programma
 	}
+	
+	print_help();			
+	
 	err=get_username(fd);
 	if(err){
 		printf("Errore durante inserimento username\n");
@@ -90,15 +129,19 @@ int main(int argc, char*argv[]){
 		char *line = NULL; //stringa che contiene i caratteri della linea
 		char *tokens[MAX_ARGS+1];//conterrà i token della linea di input, +1 xke l ultima cella deve memorizzare null
 		int k=0; //serve per indicizzare l array token
+		int n;
 		if(game_running)
 			printf("# ");
 		else 
 			printf("> ");
-		err=getline(&line,&nchars,stdin);//stdin file che rappresenta lo standardinput
-		if(err<0){
+		n=getline(&line,&nchars,stdin);//stdin file che rappresenta lo standardinput
+		if(n<=0){
 			perror("getline()");
 			continue;//xke ci riprova che può essere un errore temporaneo, causato da mancanza di memoria(per esempio)
 		}
+		
+		// sostituisci '\n' con '\0'
+		line[n-1] = '\0';
 		
 		tokens[k] = strtok(line, " "); //funzione non rientrante
 		while( tokens[k] != NULL ) 
@@ -109,16 +152,17 @@ int main(int argc, char*argv[]){
 			}
 			tokens[k] = strtok(NULL, " ");
    		}
+		
 		printf("letti %d\n", k);
 		for(i=0;i<k;i++){
 			printf("%s\n",tokens[i]);
 		}
+		
 		if(strcmp(tokens[0],"!help")==0){
-			
-			
+			cmd_help(fd,tokens,k);			
 		}
 		else if(strcmp(tokens[0],"!who")==0){
-			
+			cmd_who(fd,tokens,k);			
 		}
 		else if(strcmp(tokens[0],"!create")==0){
 			

@@ -41,6 +41,25 @@ void gestisci_client_2(struct gestore*g){
 		return;
 	}
 	g->username[n]='\0';//metto il terminatore alla stringa username
+	
+	printf("Gestisco la connessione con %s\n",g->username);
+	
+	for(;;){
+		int err;
+		char cmd_buf[MAX_BUFF_LEN];
+		n=read_message(g->fd,cmd_buf,MAX_BUFF_LEN);
+		if(n<=0){
+			send_string(g->fd,"Errore durante lettura username");
+			return;
+		}
+		cmd_buf[n]='\0';
+		printf("%s\n",cmd_buf);
+		err=send_string(g->fd,"xdgdg");
+		if(err){
+			printf("Errore trasmissione risposta\n");
+			return;
+		}
+	}
 	printf("Ho gestito la connessione con %s\n",g->username);
 	usleep(5000000);
 } 
