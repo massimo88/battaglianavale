@@ -16,6 +16,7 @@ int main(int argc, char*argv[]){
 	int fd; // file descriptor per il socket locale che servirà per connettersi e parlare col server.
 	int err;
 	int port;
+	int game_running=0;// variabile booleana che indica se siamo nella fase di gioco o di contrattazione
 	//gestione argomenti linea di comando
 	if (argc!=3){
 		printf("Sono richiesti due argomenti\n");
@@ -50,6 +51,29 @@ int main(int argc, char*argv[]){
 	if (err){
 		perror("connect()");
 		return -1;//xke devo uscire dal programma
+	}
+//loop ingresso comandidello standard input inviati al server
+	for(;;){
+		size_t nchars;//conterrà il numero delle lettere inserite da tastiera nella linea
+		char *line = NULL; //stringa che contiene i caratteri della linea
+		char *token;
+		if(game_running)
+			printf("# ");
+		else 
+			printf("> ");
+		err=getline(&line,&nchars,stdin);//stdin file che rappresenta lo standardinput
+		if(err<0){
+			perror("getline()");
+			continue;//xke ci riprova che può essere un errore temporaneo, causato da mancanza di memoria(per esempio)
+		}
+		
+		token = strtok(line, " "); //funzione non rientrante
+   		while( token != NULL ) 
+   		{
+      		printf( " %s\n", token );
+      		token = strtok(NULL, " ");
+   		}
+		free(line);
 	}
 //anche se nn lo scrivo, la close la fa da solo
 	close(fd);
