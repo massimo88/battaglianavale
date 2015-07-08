@@ -5,11 +5,16 @@
 #include <errno.h>
 #include <string.h>
 #include <pthread.h>
+#include "nbattle_common.h"
 
 #define NUM_THREADS 5
+#define MAX_USERNAME_LEN 32
+
 
 //struttura informazioni relative ad un thread nel s.pool
 struct gestore {
+	char username[MAX_USERNAME_LEN+1];//+1 per dare spazio al terminatore
+	int fd;
 	pthread_t th;	
 	pthread_cond_t newrequest;
 	int occupato;
@@ -26,10 +31,26 @@ struct server {
 struct server s; //variabili globale
 
 
+
+void gestisci_client_2(struct gestore*g){
+	int n;
+	//legge l'username dal client
+	n=read_message(g->fd,g->username,MAX_USERNAME_LEN);		
+	if(n<=0){
+		send_string(g->fd,"Errore durante lettura username");
+		return;
+	}
+	g->username[n]='\0';//metto il terminatore alla stringa username
+	printf("Ho gestito la connessione con %s\n",g->username);
+	usleep(5000000);
+} 
+
 void * gestisci_client(void *arg){
 	
 	struct gestore* g=arg;
 	for(;;){
+		
+
 //prendo il lock per utilizzare la variabile codition
 		pthread_mutex_lock(&s.main_lock);
 //aspetta che arrivi l segnale nel frattempo si blocca rilasciano il lock
@@ -37,8 +58,9 @@ void * gestisci_client(void *arg){
 			pthread_cond_wait(&g->newrequest,&s.main_lock);
 		}
 		pthread_mutex_unlock(&s.main_lock);
-		printf("Ho gestito la connessione\n");
-		usleep(5000000);
+
+		gestisci_client_2(g);
+		
 		pthread_mutex_lock(&s.main_lock);
 		g->occupato=0;
 	//sveglio, dato che nn sono piu occupato, il main
@@ -141,12 +163,11 @@ int main(int argc, char* argv[]){
 		printf("Selezionato thread %d\n", i);
 		//la variabile i puo valere da 0 a numthreads-1
 		s.pool[i].occupato=1;
+		s.pool[i].fd= cfd;
   	//sveglio il thread i esimo che si era bloccato nella wait		
 		pthread_cond_signal (&s.pool[i].newrequest);
 		pthread_mutex_unlock(&s.main_lock);
 	}
-	
-	
 
 	return 0;
 }

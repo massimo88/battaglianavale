@@ -4,11 +4,37 @@
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
+#include <stdint.h>
+#include "nbattle_common.h"
+
+#define MAX_ARGS 3
 
 void usage (void){
 	printf("	nbattle_client <host remoto> <porta>\n");
 }
 
+int get_username(int fd){
+	size_t nchars = 0;
+	char *line = NULL; //stringa che contiene i caratteri della linea
+	int n;//conterrà il numero delle lettere inserite da tastiera nella linea
+	//inserimento username
+	printf("Inserisci il tuo nome:");
+	n=getline(&line,&nchars,stdin);//stdin file che rappresenta lo standardinput
+	if(n<0){
+		perror("getline()");
+		return -1;
+	}
+	
+	if(strcmp(line,"\n")==0){
+		printf("Il nome non può essere vuoto\n");
+		return -1;
+	}
+	
+//-1 cosi nn includo il \n	
+	send_message(fd,line,n-1);
+	
+	return 0;	
+}
 int main(int argc, char*argv[]){
 	
 	//struct per il bind 
@@ -16,6 +42,7 @@ int main(int argc, char*argv[]){
 	int fd; // file descriptor per il socket locale che servirà per connettersi e parlare col server.
 	int err;
 	int port;
+	int i;
 	int game_running=0;// variabile booleana che indica se siamo nella fase di gioco o di contrattazione
 	//gestione argomenti linea di comando
 	if (argc!=3){
@@ -52,11 +79,17 @@ int main(int argc, char*argv[]){
 		perror("connect()");
 		return -1;//xke devo uscire dal programma
 	}
+	err=get_username(fd);
+	if(err){
+		printf("Errore durante inserimento username\n");
+		return -1;
+	}
 //loop ingresso comandidello standard input inviati al server
 	for(;;){
 		size_t nchars;//conterrà il numero delle lettere inserite da tastiera nella linea
 		char *line = NULL; //stringa che contiene i caratteri della linea
-		char *token;
+		char *tokens[MAX_ARGS+1];//conterrà i token della linea di input, +1 xke l ultima cella deve memorizzare null
+		int k=0; //serve per indicizzare l array token
 		if(game_running)
 			printf("# ");
 		else 
@@ -67,12 +100,50 @@ int main(int argc, char*argv[]){
 			continue;//xke ci riprova che può essere un errore temporaneo, causato da mancanza di memoria(per esempio)
 		}
 		
-		token = strtok(line, " "); //funzione non rientrante
-   		while( token != NULL ) 
+		tokens[k] = strtok(line, " "); //funzione non rientrante
+		while( tokens[k] != NULL ) 
    		{
-      		printf( " %s\n", token );
-      		token = strtok(NULL, " ");
+			k++;//memorizzo in ciascuna cella un argomento diverso
+			if(k>=MAX_ARGS){
+				break;
+			}
+			tokens[k] = strtok(NULL, " ");
    		}
+		printf("letti %d\n", k);
+		for(i=0;i<k;i++){
+			printf("%s\n",tokens[i]);
+		}
+		if(strcmp(tokens[0],"!help")==0){
+			
+			
+		}
+		else if(strcmp(tokens[0],"!who")==0){
+			
+		}
+		else if(strcmp(tokens[0],"!create")==0){
+			
+		}
+		else if(strcmp(tokens[0],"!join")==0){
+			
+		}
+		else if(strcmp(tokens[0],"!disconnect")==0){
+			
+		}
+		else if(strcmp(tokens[0],"!quit")==0){
+			
+		}
+		else if(strcmp(tokens[0],"!show_enemy_map")==0){
+			
+		}
+		else if(strcmp(tokens[0],"!show_my_map")==0){
+			
+		}
+		else if(strcmp(tokens[0],"!hit")==0){
+			
+		}
+		else{
+			printf("comando %s non esistente\n",tokens[0]);
+		}
 		free(line);
 	}
 //anche se nn lo scrivo, la close la fa da solo
