@@ -30,8 +30,8 @@ void print_help(void)
 void cmd_help(int fd,char* tokens[],int num_tokens){
 	print_help();
 }
-
-void cmd_who(int fd,char* tokens[],int num_tokens){
+//funzione comune per spedire un comando
+void cmd_common(int fd,char* tokens[],int num_tokens){
 	int err;
 	int n;
 	char buff[MAX_BUFF_LEN+1];
@@ -49,8 +49,43 @@ void cmd_who(int fd,char* tokens[],int num_tokens){
 	printf("%s\n",buff);
 }
 
+void cmd_who(int fd,char* tokens[],int num_tokens){
+	cmd_common(fd,tokens,num_tokens);
+}
+
+void cmd_create(int fd,char* tokens[],int num_tokens){
+	printf("Nuova partita creata\n");
+	printf("In attesa di un avversario...");
+	cmd_common(fd,tokens,num_tokens);
+	printf("La partita è iniziata");	
+}
+
+void cmd_join(int fd,char* tokens[],int num_tokens){
+	char *line = NULL; //stringa che contiene i caratteri della linea
+	int n;//conterrà il numero delle lettere inserite da tastiera nella linea
+        size_t nchars;
+	printf("Inserire lo username dell'utente da sfidare: ");
+	n=getline(&line,&nchars,stdin);//stdin file che rappresenta lo standardinput
+	if(n<0){
+		perror("getline()");
+		return;
+	}
+	
+	if(strcmp(line,"\n")==0){
+		printf("Il nome non può essere vuoto\n");
+		return;
+	}
+	line[n-1]='\0';
+	tokens[num_tokens]= line; //metto l username come argomento della join 
+	num_tokens++; //aggiungo un argomento in coda
+	cmd_common(fd,tokens,num_tokens);
+	printf("La partita è iniziata");	
+}
+
+
+
 int get_username(int fd){
-	size_t nchars = 0;
+	size_t nchars = 0; //variabile che fa parte del funzionamento della getline
 	char *line = NULL; //stringa che contiene i caratteri della linea
 	int n;//conterrà il numero delle lettere inserite da tastiera nella linea
 	//inserimento username
@@ -140,7 +175,7 @@ int main(int argc, char*argv[]){
 			continue;//xke ci riprova che può essere un errore temporaneo, causato da mancanza di memoria(per esempio)
 		}
 		
-		// sostituisci '\n' con '\0'
+		// sostituisci '\n' con '\0', il \n nn lo voglio e lo voglio eliminare, xke la getline mi restituisce una stringa dove nella posizione n-1 mi restituisce il \n. 
 		line[n-1] = '\0';
 		
 		tokens[k] = strtok(line, " "); //funzione non rientrante
@@ -157,16 +192,18 @@ int main(int argc, char*argv[]){
 			printf("%s\n",tokens[i]);
 		}
 		
-		if(strcmp(tokens[0],"!help")==0){
+		if(strcmp(tokens[0],"!help")==0){  //token[0] si riferisce alla prima parola
 			cmd_help(fd,tokens,k);			
 		}
 		else if(strcmp(tokens[0],"!who")==0){
 			cmd_who(fd,tokens,k);			
 		}
 		else if(strcmp(tokens[0],"!create")==0){
+			cmd_create(fd,tokens,k);
 			
 		}
 		else if(strcmp(tokens[0],"!join")==0){
+			cmd_join(fd,tokens,k);
 			
 		}
 		else if(strcmp(tokens[0],"!disconnect")==0){
