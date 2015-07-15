@@ -30,23 +30,47 @@ void print_help(void)
 void cmd_help(int fd,char* tokens[],int num_tokens){
 	print_help();
 }
+
 //funzione comune per spedire un comando
-void cmd_common(int fd,char* tokens[],int num_tokens){
+int cmd_common(int fd,char* tokens[],int num_tokens){
 	int err;
-	int n;
+	int n=0;
 	char buff[MAX_BUFF_LEN+1];
-	err=send_string(fd,tokens[0]);
-	if(err){
-		printf("Errore trasmissione comando %s \n",tokens[0]);
-		return;
+	int left=sizeof(buff);
+	char *first_space;
+	int retcode;
+
+	err = send_tokens(fd, tokens, num_tokens);
+	if (err) {
+		return err;
 	}
+
 	n=read_message(fd,buff,sizeof(buff));
 	if(n<0){
 		printf("Errore ricezione risposta\n");
-		return;
+		return -1;
 	}
 	buff[n]='\0';//mette il terminatore alla stringa del msg ricevuto dal server
-	printf("%s\n",buff);
+
+	first_space = strchr(buff, ' ');
+	if (first_space == NULL || first_space - buff != 2 ||
+		 (strncmp(buff, "OK", 2) && strncmp(buff, "KO", 2))) {
+		printf("Formato risposta server non valido");
+		return -1;
+	}
+
+	// 0 significa OK, 1 significa KO
+
+	retcode = (strncmp(buff, "OK", 2) == 0) ? 0 : 1;
+
+	if (retcode == 0) {
+		printf("[OK]");
+	} else {
+		printf("[FAIL]");
+	}
+	printf("%s\n", first_space + 1);
+
+	return retcode;
 }
 
 void cmd_who(int fd,char* tokens[],int num_tokens){
@@ -63,22 +87,22 @@ void cmd_create(int fd,char* tokens[],int num_tokens){
 void cmd_join(int fd,char* tokens[],int num_tokens){
 	char *line = NULL; //stringa che contiene i caratteri della linea
 	int n;//conterrà il numero delle lettere inserite da tastiera nella linea
-        size_t nchars;
+        size_t nchars;//scritto su manuale della getline
 	printf("Inserire lo username dell'utente da sfidare: ");
 	n=getline(&line,&nchars,stdin);//stdin file che rappresenta lo standardinput
 	if(n<0){
 		perror("getline()");
 		return;
 	}
-	
+
 	if(strcmp(line,"\n")==0){
 		printf("Il nome non può essere vuoto\n");
 		return;
 	}
 	line[n-1]='\0';
-	tokens[num_tokens]= line; //metto l username come argomento della join 
-	num_tokens++; //aggiungo un argomento in coda
-	cmd_common(fd,tokens,num_tokens);
+	tokens[1]= line; //metto l username come argomento della join 
+	cmd_common(fd,tokens,2);//ignora gli argomenti dopo il "!join"
+	free(line);// xke la getline mi alloca il buffer e quindi è compito del chiamante liberarla
 	printf("La partita è iniziata");	
 }
 

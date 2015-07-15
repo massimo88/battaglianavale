@@ -12,11 +12,18 @@
 #define MAX_USERNAME_LEN 32
 
 
+enum {
+	IDLE = 0,
+	INIT,
+	WAIT_FOR_JOIN,
+	PLAYING,
+};
+
 //struttura informazioni relative ad un thread nel s.pool
 struct gestore {
 	char username[MAX_USERNAME_LEN+1];//+1 per dare spazio al terminatore
 	int fd; 
-	int wait_for_join;
+	int current_state;
 	struct gestore *peer;//chi è il compagno di gioco(legame tra due celle con stessa struttura e contenuto diverso)
 	pthread_t th;	
 	pthread_cond_t newrequest; //variabile condition
@@ -44,7 +51,7 @@ void server_who(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	int left=sizeof(buf);//variabili che tiene i bytes disponibili nel buffer
 	char *cur = buf;
 
-	n=snprintf(cur,left,"Clienti connessi al server:");
+	n=snprintf(cur,left,"OK Clienti connessi al server:");
 	cur+=n;
 	left-=n;
 //scorri i pool di thread per raccogliere i nomi(username)
@@ -66,22 +73,49 @@ void server_who(int fd,char* tokens[],int num_tokens,struct gestore*g){
 void server_join(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	int i;
 	int err;
-	int found=0;
-	
-	//scorri i pool di thread per raccogliere i nomi(username)
-	for(i=0;i<NUM_THREADS && !found;i++){//quando ho trovato l'utente(quello che ha fatto create) mi fermo
-		pthread_mutex_lock (&s.pool[i].lock);
-		if(s.pool[i].wait_for_join && strcmp(s.pool[i].username,tokens[1])==0){ //controllo se è disponibile quello che ho scelto per giocare
-			s.pool[i].peer=g; //collego me stesso al peer che ho scelto
-			pthread_cond_signal(&s.pool[i].join);
-			found=1;
-		}
+	int username_found=0;
+	int peer_state; // stato dell'utente specificato nella join
+	int found = 0;
+	const char *rettoks[2]; // tokens[0] contiene il retcode, tokens[1] un messaggio
+
+	rettoks[0] = "KO";
+	rettoks[1] = "";
+
+	if(num_tokens<2){
+		printf("server join request due argomenti\n");
+	} else {
+		//scorri i pool di thread per raccogliere i nomi(username)
+		for(i=0;i<NUM_THREADS && !found;i++){//quando ho trovato l'utente(quello che ha fatto create) mi fermo
+			pthread_mutex_lock (&s.pool[i].lock);
+			if (strcmp(s.pool[i].username,tokens[1])==0) {
+				username_found = 1;
+				peer_state = s.pool[i].current_state;
+			}
+
+			if(strcmp(s.pool[i].username,tokens[1])==0 && s.pool[i].current_state == WAIT_FOR_JOIN){ //controllo se è disponibile
+				s.pool[i].peer=g; //collego me stesso al peer che ho scelto
+				s.pool[i].current_state = PLAYING;
+				pthread_cond_signal(&s.pool[i].join);
+				found=1;
+				rettoks[0]="OK";
+			}
 		
-		pthread_mutex_unlock (&s.pool[i].lock);
+			pthread_mutex_unlock (&s.pool[i].lock);
+		}
 	}	
 
+	if (!username_found) {
+		rettoks[1] = "Username inserito è inesistente";
+	} else if (!found) {
+		if (peer_state == PLAYING) {
+			rettoks[1] = "L'avversario è già occupato in una partita";
+		} else {
+			rettoks[1] = "L'avversario non è in ascolto";
+		}
+	}
+
 //invio la risposta
-	err=send_string(g->fd,"ok\n");
+	err=send_tokens(g->fd, rettoks, 2);
 	if(err){
 		printf("Errore di trasmissione risposta\n");
 		return;
@@ -97,12 +131,12 @@ void server_create(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	
 //il client chiede di creare una nuova partita, g si riferisce al thread gestore(client) corrente
 	pthread_mutex_lock (&g->lock);
-	g->wait_for_join=1;
+	g->current_state=WAIT_FOR_JOIN;
 	pthread_cond_wait(&g->join,&g->lock);//ho l indirizo della variabile condition, aspetto che accede qualcuno per giocare
 	pthread_mutex_unlock (&g->lock);
 //ora accedo al peer
 	pthread_mutex_lock (&g->peer->lock);
-	n=snprintf(cur,left,"%s Si è unito alla partita\n",g->peer->username);
+	n=snprintf(cur,left,"OK %s Si è unito alla partita\n",g->peer->username);
 	cur+=n;
 	left-=n; //serve per tenere traccia di quanto buffer mi è avanzato
 	pthread_mutex_unlock (&g->peer->lock);
@@ -187,7 +221,10 @@ void gestisci_client_2(struct gestore*g){
 		printf("%s\n",cmd_buf);
 	}
 	printf("Ho gestito la connessione con %s\n",g->username);
-	usleep(5000000); //attendi 5 secondi
+	pthread_mutex_lock (&g->lock);
+	g->username[0] = '\0';
+	g->current_state = INIT;
+	pthread_mutex_unlock (&g->lock);
 } 
 
 void * gestisci_client(void *arg){
@@ -225,6 +262,7 @@ int main(int argc, char* argv[]){
 	int err;
 	int i;
 	int port;
+	int enable=1; //variabile che contiene il valore dell'opzione socket
 	//gestione argomenti linea di comando
 	if (argc!=3){
 		printf("Sono richiesti due argomenti\n");
@@ -250,7 +288,8 @@ int main(int argc, char* argv[]){
 	pthread_mutex_init(&s.main_lock, NULL);//inizializzo il lock
 	for(i=0; i< NUM_THREADS; i++) {
 		s.pool[i].occupato=0;
-		s.pool[i].wait_for_join=0;
+		s.pool[i].current_state=IDLE;
+		s.pool[i].username[0] = '\0';
 		err=pthread_create(&s.pool[i].th, NULL, gestisci_client, &s.pool[i]);
 		if (err){
 			perror("phtread_create()");
@@ -270,6 +309,12 @@ int main(int argc, char* argv[]){
 	server_addr.sin_addr.s_addr= INADDR_ANY;
 	server_addr.sin_family=AF_INET;
 	server_addr.sin_port= htons(port);
+	err=setsockopt(lfd,SOL_SOCKET,SO_REUSEADDR,&enable,sizeof(enable));//setta l'opzione reuseaddre cosi la bind nn si preoccupa del fatto che ci sia un socket tcp legato allo stesso nome in stato time_wait
+	if(err) {
+		perror("bind()");
+		return -1;//xke devo uscire dal programma
+	}
+	
 	err=bind(lfd,(struct sockaddr*)&server_addr, sizeof(server_addr));
 	
 	if(err) {
