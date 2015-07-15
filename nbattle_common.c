@@ -14,7 +14,11 @@ int read_message(int fd, void* buff,size_t len){
 	int n;
 	n=read(fd,&l,sizeof(l));
 	if(n!=sizeof(l)){
-		perror("Errore ricezione lunghezza\n");
+		if (n < 0) {
+			perror("Errore ricezione lunghezza\n");
+		} else if (n == 0) {
+			printf("Il client ha chiuso la connessione\n");
+		}
 		return -1;
 	}
 	
@@ -42,14 +46,18 @@ int send_message(int fd, void* buff,size_t len){
 	}
 	l=len;
 
-	n=write(fd,&l,sizeof(l));
+	n=write(fd,&l,sizeof(l));//spedisco la lunghezza del msg
 	if(n!=sizeof(l)){
-		perror("Errore trasmissione lunghezza\n");
+		if(n!=EPIPE){//se nons i può scrivere la connessione tcp, inutile che mi stampi brokenpipe
+			perror("Errore trasmissione lunghezza\n");
+		}
 		return -1;
 	}
-	n=write(fd,buff,len);
+	n=write(fd,buff,len); //spedisco il msg
 	if(n!=len){
-		perror("Errore trasmissione messaggio\n");
+		if(n!=EPIPE){
+			perror("Errore trasmissione messaggio\n");
+		}		
 		return -1;
 	}
 	

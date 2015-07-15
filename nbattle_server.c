@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <string.h>
 #include <pthread.h>
+#include <signal.h> //serve per usare la funzione signal
 #include "nbattle_common.h"
 
 #define NUM_THREADS 5
@@ -134,7 +135,7 @@ void gestisci_client_2(struct gestore*g){
 		int i;
 		n=read_message(g->fd,cmd_buf,MAX_BUFF_LEN);
 		if(n<=0){
-			send_string(g->fd,"Errore durante lettura username");
+			send_string(g->fd,"Errore durante lettura comando");
 			return;
 		}
 		cmd_buf[n]='\0';
@@ -243,7 +244,7 @@ int main(int argc, char* argv[]){
 		return -1;	
 	}
 
-
+	signal(SIGPIPE,SIG_IGN);
 
 	pthread_cond_init(&s.gestore_libero, NULL);	
 	pthread_mutex_init(&s.main_lock, NULL);//inizializzo il lock
@@ -284,7 +285,7 @@ int main(int argc, char* argv[]){
 	//creo un for per accettare molte connessioni che mi vengono richeste
 	for(;;){
 		int cfd;//client file descriptor
-		socklen_t addrlen;
+		socklen_t addrlen = sizeof(struct sockaddr_in);
 		struct sockaddr_in client_addr;
 //ritorna un file descriptor, associato alla connessione del client
 		cfd=accept(lfd,(struct sockaddr*)&client_addr, &addrlen);
