@@ -68,7 +68,7 @@ int send_string(int fd,char *s){
 	return send_message(fd,s,strlen(s)+1);
 }
 
-int send_tokens(int fd, const char *tokens[], int num_tokens)
+int send_tokens(int fd, const char **tokens, int num_tokens)
 {
 	int err;
 	int n=0;

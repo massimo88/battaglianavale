@@ -36,7 +36,6 @@ int cmd_common(int fd,char* tokens[],int num_tokens){
 	int err;
 	int n=0;
 	char buff[MAX_BUFF_LEN+1];
-	int left=sizeof(buff);
 	char *first_space;
 	int retcode;
 
@@ -78,10 +77,13 @@ void cmd_who(int fd,char* tokens[],int num_tokens){
 }
 
 void cmd_create(int fd,char* tokens[],int num_tokens){
+	int retcode;
 	printf("Nuova partita creata\n");
 	printf("In attesa di un avversario...");
-	cmd_common(fd,tokens,num_tokens);
-	printf("La partita è iniziata");	
+	retcode = cmd_common(fd,tokens,num_tokens);
+	if (retcode == 0) {
+		printf("La partita è iniziata");
+	}	
 }
 
 void cmd_join(int fd,char* tokens[],int num_tokens){
