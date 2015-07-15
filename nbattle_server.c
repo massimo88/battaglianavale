@@ -128,7 +128,6 @@ void gestisci_client_2(struct gestore*g){
 	printf("Gestisco la connessione con %s\n",g->username);
 	
 	for(;;){
-		int err;
 		char cmd_buf[MAX_BUFF_LEN];
 		char *tokens[MAX_ARGS+1];//conterrà i token della linea di input, +1 xke l ultima cella deve memorizzare null
 		int k=0; //serve per indicizzare l array token
@@ -185,11 +184,6 @@ void gestisci_client_2(struct gestore*g){
 		}
 		
 		printf("%s\n",cmd_buf);
-		err=send_string(g->fd,"xdgdg");
-		if(err){
-			printf("Errore trasmissione risposta\n");
-			return;
-		}
 	}
 	printf("Ho gestito la connessione con %s\n",g->username);
 	usleep(5000000); //attendi 5 secondi
