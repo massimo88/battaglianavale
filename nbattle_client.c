@@ -243,17 +243,31 @@ int main(int argc, char*argv[]){
 			cmd_who(fd,tokens,k);			
 		}
 		else if(strcmp(tokens[0],"!create")==0){
-			retcode = cmd_create(fd,tokens,k);
-			if (retcode == 0) {
-				// passo in modalità di gioco
-				game_running = 1;
+			if (game_running) {
+				// faccio il controllo lato client (qui) e non lo faccio
+				// sul server, ma andrebbe fatto anche lì per evitare
+				// attacchi informatici da parte di client maliziosi (modificati)
+				printf("Non posso creare la partita non sto già giocando\n");
+			} else {
+				retcode = cmd_create(fd,tokens,k);
+				if (retcode == 0) {
+					// passo in modalità di gioco
+					game_running = 1;
+				}
 			}
 		}
 		else if(strcmp(tokens[0],"!join")==0){
-			retcode = cmd_join(fd,tokens,k);
-			if (retcode == 0) {
-				// passo in modalità di gioco
-				game_running = 1;
+			if (game_running) {
+				// faccio il controllo lato client (qui) e non lo faccio
+				// sul server, ma andrebbe fatto anche lì per evitare
+				// attacchi informatici da parte di client maliziosi (modificati)
+				printf("Non posso unirmi alla partita non sto già giocando\n");
+			} else {
+				retcode = cmd_join(fd,tokens,k);
+				if (retcode == 0) {
+					// passo in modalità di gioco
+					game_running = 1;
+				}
 			}
 		}
 		else if(strcmp(tokens[0],"!disconnect")==0){
@@ -272,12 +286,23 @@ int main(int argc, char*argv[]){
 			break;
 		}
 		else if(strcmp(tokens[0],"!show_enemy_map")==0){
-			
+			if (!game_running) {
+				printf("Non posso, non sto giocando!\n");
+			} else {
+			}
 		}
 		else if(strcmp(tokens[0],"!show_my_map")==0){
+			if (!game_running) {
+				printf("Non posso, non sto giocando!\n");
+			} else {
+			}
 			
 		}
 		else if(strcmp(tokens[0],"!hit")==0){
+			if (!game_running) {
+				printf("Non posso, non sto giocando!\n");
+			} else {
+			}
 			
 		}
 		else{

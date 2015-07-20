@@ -152,20 +152,31 @@ void server_create(int fd,char* tokens[],int num_tokens,struct gestore*g){
 
 void server_disconnect(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	int err;
+	int peer_surrendered = 0;
 	char *rettoks[2]; // tokens[0] contiene il retcode, tokens[1] un messaggio
 
 	rettoks[0] = "OK";
 	rettoks[1] = "";
 
-	pthread_mutex_lock (&g->peer->lock);
-	g->peer->current_state = PEER_SURRENDERED;
-	g->peer->peer = NULL;
-	pthread_mutex_unlock (&g->peer->lock);
-
+	// devo controllare che il peer non si è già arreso prima di me, e nel caso
+	// saltare la procedura di resa, anzi in realtà ho vinto!
 	pthread_mutex_lock (&g->lock);
-	g->current_state = INIT;
-	g->peer = NULL;
+	if (g->current_state == PEER_SURRENDERED) {
+		peer_surrendered = 1;
+	}
 	pthread_mutex_unlock (&g->lock);
+
+	if (!peer_surrendered) {
+		pthread_mutex_lock (&g->peer->lock);
+		g->peer->current_state = PEER_SURRENDERED;
+		g->peer->peer = NULL;
+		pthread_mutex_unlock (&g->peer->lock);
+
+		pthread_mutex_lock (&g->lock);
+		g->current_state = INIT;
+		g->peer = NULL;
+		pthread_mutex_unlock (&g->lock);
+	}
 
 //invio la risposta
 	err=send_tokens(g->fd, rettoks, 2);
