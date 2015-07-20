@@ -27,8 +27,9 @@ void print_help(void)
 "* !hit coordinates --> colpisci le coordinate coordinates\n");
 }
 
-void cmd_help(int fd,char* tokens[],int num_tokens){
+int cmd_help(int fd,char* tokens[],int num_tokens){
 	print_help();
+        return 0;
 }
 
 //funzione comune per spedire un comando
@@ -72,42 +73,53 @@ int cmd_common(int fd,char* tokens[],int num_tokens){
 	return retcode;
 }
 
-void cmd_who(int fd,char* tokens[],int num_tokens){
-	cmd_common(fd,tokens,num_tokens);
+int cmd_who(int fd,char* tokens[],int num_tokens){
+	return cmd_common(fd,tokens,num_tokens);
 }
 
-void cmd_create(int fd,char* tokens[],int num_tokens){
+int cmd_create(int fd,char* tokens[],int num_tokens){
 	int retcode;
 	printf("Nuova partita creata\n");
-	printf("In attesa di un avversario...");
+	printf("In attesa di un avversario...\n");
 	retcode = cmd_common(fd,tokens,num_tokens);
 	if (retcode == 0) {
-		printf("La partita è iniziata");
-	}	
+		printf("La partita è iniziata\n");
+	}
+	return retcode;
 }
 
-void cmd_join(int fd,char* tokens[],int num_tokens){
+int cmd_join(int fd,char* tokens[],int num_tokens){
 	char *line = NULL; //stringa che contiene i caratteri della linea
 	int n;//conterrà il numero delle lettere inserite da tastiera nella linea
         size_t nchars;//scritto su manuale della getline
+	int retcode;
 	printf("Inserire lo username dell'utente da sfidare: ");
 	n=getline(&line,&nchars,stdin);//stdin file che rappresenta lo standardinput
 	if(n<0){
 		perror("getline()");
-		return;
+		return -1;
 	}
 
 	if(strcmp(line,"\n")==0){
 		printf("Il nome non può essere vuoto\n");
-		return;
+		return -1;
 	}
 	line[n-1]='\0';
 	tokens[1]= line; //metto l username come argomento della join 
-	cmd_common(fd,tokens,2);//ignora gli argomenti dopo il "!join"
+	retcode = cmd_common(fd,tokens,2);//ignora gli argomenti dopo il "!join"
 	free(line);// xke la getline mi alloca il buffer e quindi è compito del chiamante liberarla
-	printf("La partita è iniziata");	
+	printf("La partita è iniziata\n");
+	return retcode;
 }
 
+int cmd_disconnect(int fd,char* tokens[],int num_tokens){
+	int retcode;
+	retcode = cmd_common(fd,tokens,1);//ignora gli argomenti dopo il "!join"
+	if (retcode == 0) {
+		printf("Disconesso dalla partita\n");
+	}
+	return retcode;
+}
 
 
 int get_username(int fd){
@@ -191,6 +203,7 @@ int main(int argc, char*argv[]){
 		char *tokens[MAX_ARGS+1];//conterrà i token della linea di input, +1 xke l ultima cella deve memorizzare null
 		int k=0; //serve per indicizzare l array token
 		int n;
+		int retcode;
 		if(game_running)
 			printf("# ");
 		else 
@@ -218,6 +231,11 @@ int main(int argc, char*argv[]){
 			printf("%s\n",tokens[i]);
 		}
 		
+		if (k == 0) {
+			free(line);
+			continue;
+		}
+
 		if(strcmp(tokens[0],"!help")==0){  //token[0] si riferisce alla prima parola
 			cmd_help(fd,tokens,k);			
 		}
@@ -225,15 +243,30 @@ int main(int argc, char*argv[]){
 			cmd_who(fd,tokens,k);			
 		}
 		else if(strcmp(tokens[0],"!create")==0){
-			cmd_create(fd,tokens,k);
-			
+			retcode = cmd_create(fd,tokens,k);
+			if (retcode == 0) {
+				// passo in modalità di gioco
+				game_running = 1;
+			}
 		}
 		else if(strcmp(tokens[0],"!join")==0){
-			cmd_join(fd,tokens,k);
-			
+			retcode = cmd_join(fd,tokens,k);
+			if (retcode == 0) {
+				// passo in modalità di gioco
+				game_running = 1;
+			}
 		}
 		else if(strcmp(tokens[0],"!disconnect")==0){
-			
+			if (!game_running) {
+				printf("Non posso disconnettermi, non sto giocando\n");
+			} else {
+				retcode = cmd_disconnect(fd, tokens,k);
+				if (retcode == 0) {
+					// rimetto a zero perchè ritorno in
+					// modalità configurazione
+					game_running = 0;
+				}
+			}
 		}
 		else if(strcmp(tokens[0],"!quit")==0){
 			break;

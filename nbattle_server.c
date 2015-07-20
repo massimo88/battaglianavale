@@ -17,6 +17,7 @@ enum {
 	INIT,
 	WAIT_FOR_JOIN,
 	PLAYING,
+	PEER_SURRENDERED,
 };
 
 //struttura informazioni relative ad un thread nel s.pool
@@ -76,7 +77,7 @@ void server_join(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	int username_found=0;
 	int peer_state; // stato dell'utente specificato nella join
 	int found = 0;
-	const char *rettoks[2]; // tokens[0] contiene il retcode, tokens[1] un messaggio
+	char *rettoks[2]; // tokens[0] contiene il retcode, tokens[1] un messaggio
 
 	rettoks[0] = "KO";
 	rettoks[1] = "";
@@ -149,6 +150,31 @@ void server_create(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	}
 }
 
+void server_disconnect(int fd,char* tokens[],int num_tokens,struct gestore*g){
+	int err;
+	char *rettoks[2]; // tokens[0] contiene il retcode, tokens[1] un messaggio
+
+	rettoks[0] = "OK";
+	rettoks[1] = "";
+
+	pthread_mutex_lock (&g->peer->lock);
+	g->peer->current_state = PEER_SURRENDERED;
+	g->peer->peer = NULL;
+	pthread_mutex_unlock (&g->peer->lock);
+
+	pthread_mutex_lock (&g->lock);
+	g->current_state = INIT;
+	g->peer = NULL;
+	pthread_mutex_unlock (&g->lock);
+
+//invio la risposta
+	err=send_tokens(g->fd, rettoks, 2);
+	if(err){
+		printf("Errore di trasmissione risposta\n");
+		return;
+	}
+}
+
 void gestisci_client_2(struct gestore*g){
 	int n;
 	//legge l'username dal client
@@ -200,7 +226,7 @@ void gestisci_client_2(struct gestore*g){
 			
 		}
 		else if(strcmp(tokens[0],"!disconnect")==0){
-			
+			server_disconnect(g->fd,tokens,k,g);
 		}
 		else if(strcmp(tokens[0],"!quit")==0){
 			
