@@ -9,6 +9,42 @@
 
 
 
+struct specifica_navi {
+	int num;
+	int dimensione;
+};
+
+/*
+struct specifica_navi specifica[] = {
+	{
+		.num = 1,
+		.dimensione = 4,
+	},
+	{
+		.num = 2,
+		.dimensione = 3,
+	},
+	{
+		.num = 3,
+		.dimensione = 2,
+	},
+	{
+		.num = 4,
+		.dimensione = 1,
+	},
+};
+*/
+
+struct specifica_navi specifica[] = {
+	{
+		.num = 1,
+		.dimensione = 4,
+	},
+	{
+		.num = 1,
+		.dimensione = 3,
+	},
+};
 void usage (void){
 	printf("	nbattle_client <host remoto> <porta>\n");
 }
@@ -139,6 +175,97 @@ int cmd_disconnect(int fd,char* tokens[],int num_tokens){
 	return retcode;
 }
 
+int leggi_mappa(char map[COLS][COLS])
+{
+	int i, j;
+	// numero di celle in array statico = dimensione totale (in bytes) diviso
+	// dimensione di una cella
+	for (i=0; i<sizeof(specifica)/sizeof(struct specifica_navi);i++) {
+		for (j=0;j<specifica[i].num;) {
+			size_t nchars = 0;
+			char *line = NULL;
+			int n;
+			int orizzontale;
+			int riga;
+			int colonna;
+			int k;
+			int overlap = 0;
+			printf("Inserisci le coordinate della %da nave di dimensione %d: ",
+				j+1, specifica[i].dimensione);
+			n=getline(&line,&nchars,stdin);
+			if(n<0){
+				perror("getline()");
+				return -1;
+			}
+			line[n-1]='\0';
+			if (strlen(line) < 2 || line[0] <'A' || line[0] > 'A'+COLS-1) {
+				printf("Coordinate non valide\n");
+				free(line);
+				continue;
+			}
+			colonna = line[0] -'A';
+			riga = atoi(line +1);
+			riga--;
+			if (riga < 0 || riga >= COLS) {
+				printf("Coordinate non valide\n");
+				free(line);
+				continue;
+			}
+			free(line);
+
+			line = NULL;
+			printf("Inserisci l'orientamento della %da nave di dimensione %d: ",
+				j+1, specifica[i].dimensione);
+			n=getline(&line,&nchars,stdin);
+			if(n<0){
+				perror("getline()");
+				return -1;
+			}
+			line[n-1]='\0';
+
+			if (strcmp(line, "ORIZZONTALE") == 0) {
+				orizzontale = 1;
+			} else if (strcmp(line, "VERTICALE") == 0) {
+				orizzontale = 0;
+			} else {
+				printf("Orientamento non valido\n");
+				free(line);
+				continue;
+			}
+			free(line);
+
+			if ((orizzontale && colonna + specifica[i].dimensione > COLS) ||
+				(!orizzontale && riga + specifica[i].dimensione > COLS)) {
+				printf("Nave fuori da mappa! Riprova");
+				continue;
+			}
+
+			for (k=0; k<specifica[i].dimensione; k++) {
+				if ((orizzontale && map[riga][colonna+k] == 'X') ||
+						(!orizzontale && map[riga+k][colonna] == 'X')) {
+					overlap = 1;
+					break;
+				}
+			}
+
+			if (overlap) {
+				printf("Nave sovrapposta ad un'altra nave esistente\n");
+				continue;
+			}
+
+			for (k=0; k<specifica[i].dimensione; k++) {
+				if (orizzontale) {
+					map[riga][colonna+k] = 'X';
+				} else {
+					map[riga+k][colonna] = 'X';
+				}
+			}
+
+			j++;
+		}
+	}
+	return 0;
+}
 
 int get_username(int fd){
 	size_t nchars = 0; //variabile che fa parte del funzionamento della getline
@@ -209,6 +336,8 @@ int main(int argc, char*argv[]){
 	}
 	
 	memset(map, '-', COLS * COLS);
+	leggi_mappa(map);
+	print_map(map);
 
 	print_help();			
 	
