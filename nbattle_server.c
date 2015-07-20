@@ -31,6 +31,7 @@ struct gestore {
 	pthread_cond_t join;
 	int occupato;
 	pthread_mutex_t lock;
+	char map[COLS][COLS];
 };
 
 
@@ -77,11 +78,10 @@ void server_join(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	int username_found=0;
 	int peer_state; // stato dell'utente specificato nella join
 	int found = 0;
-	char *rettoks[2]; // tokens[0] contiene il retcode, tokens[1] un messaggio
+	char *rettoks[2]; // rettoks[0] contiene il retcode, rettoks[1] un messaggio
 
 	rettoks[0] = "KO";
 	rettoks[1] = "";
-
 	if(num_tokens<2){
 		printf("server join request due argomenti\n");
 	} else {
@@ -152,30 +152,32 @@ void server_create(int fd,char* tokens[],int num_tokens,struct gestore*g){
 
 void server_disconnect(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	int err;
-	int peer_surrendered = 0;
-	char *rettoks[2]; // tokens[0] contiene il retcode, tokens[1] un messaggio
+	int must_surrender = 0;
+	struct gestore *peer = NULL;
+	char *rettoks[2]; // rettoks[0] contiene il retcode, rettoks[1] un messaggio
 
 	rettoks[0] = "OK";
 	rettoks[1] = "";
 
-	// devo controllare che il peer non si è già arreso prima di me, e nel caso
-	// saltare la procedura di resa, anzi in realtà ho vinto!
+	// devo controllare che sono nello stato di gioco, prima di registrare la
+	// disconnessione. In particolare devo controllare che non
+	// sono nello stato PEER_SURRENDERED (cosa che succede se il peer ha fatto
+	// !disconnect prima di me), o nello stato INIT, cosa che succede se il client
+	// ha fatto !quit mentre non era nello stato di gioco (disconnect simulata)
 	pthread_mutex_lock (&g->lock);
-	if (g->current_state == PEER_SURRENDERED) {
-		peer_surrendered = 1;
+	if (g->current_state == PLAYING) {
+		must_surrender = 1;
+		peer = g->peer;
+		g->current_state = INIT;
+		g->peer = NULL;
 	}
 	pthread_mutex_unlock (&g->lock);
 
-	if (!peer_surrendered) {
-		pthread_mutex_lock (&g->peer->lock);
-		g->peer->current_state = PEER_SURRENDERED;
-		g->peer->peer = NULL;
-		pthread_mutex_unlock (&g->peer->lock);
-
-		pthread_mutex_lock (&g->lock);
-		g->current_state = INIT;
-		g->peer = NULL;
-		pthread_mutex_unlock (&g->lock);
+	if (must_surrender) {
+		pthread_mutex_lock (&peer->lock);
+		peer->current_state = PEER_SURRENDERED;
+		peer->peer = NULL;
+		pthread_mutex_unlock (&peer->lock);
 	}
 
 //invio la risposta
@@ -205,9 +207,15 @@ void gestisci_client_2(struct gestore*g){
 		int k=0; //serve per indicizzare l array token
 		int i;
 		n=read_message(g->fd,cmd_buf,MAX_BUFF_LEN);
-		if(n<=0){
+		if(n<0){
 			send_string(g->fd,"Errore durante lettura comando");
-			return;
+			break;
+		} else if (n == 0) {
+			// Il client ha chiuso la connessione.
+			// Simula un comando disconnect, come se fosse stato ricevuto
+			// dall'utente
+			server_disconnect(g->fd, tokens, 0, g);
+			break;
 		}
 		cmd_buf[n]='\0';
 		
@@ -261,6 +269,7 @@ void gestisci_client_2(struct gestore*g){
 	pthread_mutex_lock (&g->lock);
 	g->username[0] = '\0';
 	g->current_state = INIT;
+	memset(g->map, '-', COLS * COLS);
 	pthread_mutex_unlock (&g->lock);
 } 
 
@@ -327,6 +336,7 @@ int main(int argc, char* argv[]){
 		s.pool[i].occupato=0;
 		s.pool[i].current_state=IDLE;
 		s.pool[i].username[0] = '\0';
+		memset(s.pool[i].map, '-', COLS * COLS);
 		err=pthread_create(&s.pool[i].th, NULL, gestisci_client, &s.pool[i]);
 		if (err){
 			perror("phtread_create()");

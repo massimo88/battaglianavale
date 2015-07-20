@@ -19,7 +19,7 @@ int read_message(int fd, void* buff,size_t len){
 		} else if (n == 0) {
 			printf("Il client ha chiuso la connessione\n");
 		}
-		return -1;
+		return n;
 	}
 	
 	if(l>len){
@@ -29,8 +29,12 @@ int read_message(int fd, void* buff,size_t len){
 	
 	n=read(fd,buff,l);
 	if(n!=l){
-		perror("Errore ricezione messaggio\n");
-		return -1;
+		if (n < 0) {
+			perror("Errore ricezione messaggio\n");
+		} else if (n == 0) {
+			printf("Il client ha chiuso la connessione\n");
+		}
+		return n;
 	}
 	
 	return l;	

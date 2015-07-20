@@ -13,3 +13,5 @@ int send_tokens(int fd, char **tokens, int num_tokens);
 
 #define MAX_BUFF_LEN 256
 #define MAX_ARGS 3
+
+#define COLS	10

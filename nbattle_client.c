@@ -32,6 +32,24 @@ int cmd_help(int fd,char* tokens[],int num_tokens){
         return 0;
 }
 
+void print_map(char map[COLS][COLS])
+{
+	int i,j;
+
+	for (i=COLS-1; i>=0;i--){
+		printf("%2d ", i+1);
+		for (j=0;j<COLS;j++) {
+			printf("%c ", map[i][j]);	
+		}
+		printf("\n");
+	}
+	printf("   ");
+	for (j=0; j<COLS; j++) {
+		printf("%c ", 'A'+j);
+	}
+	printf("\n");
+}
+
 //funzione comune per spedire un comando
 int cmd_common(int fd,char* tokens[],int num_tokens){
 	int err;
@@ -116,7 +134,7 @@ int cmd_disconnect(int fd,char* tokens[],int num_tokens){
 	int retcode;
 	retcode = cmd_common(fd,tokens,1);//ignora gli argomenti dopo il "!join"
 	if (retcode == 0) {
-		printf("Disconesso dalla partita\n");
+		printf("Disconessione avvenuta con successo: TI SEI ARRESO\n");
 	}
 	return retcode;
 }
@@ -153,6 +171,7 @@ int main(int argc, char*argv[]){
 	int port;
 	int i;
 	int game_running=0;// variabile booleana che indica se siamo nella fase di gioco o di contrattazione
+	char map[COLS][COLS];
 	//gestione argomenti linea di comando
 	if (argc!=3){
 		printf("Sono richiesti due argomenti\n");
@@ -189,6 +208,8 @@ int main(int argc, char*argv[]){
 		return -1;//xke devo uscire dal programma
 	}
 	
+	memset(map, '-', COLS * COLS);
+
 	print_help();			
 	
 	err=get_username(fd);
@@ -289,12 +310,14 @@ int main(int argc, char*argv[]){
 			if (!game_running) {
 				printf("Non posso, non sto giocando!\n");
 			} else {
+				print_map(map);
 			}
 		}
 		else if(strcmp(tokens[0],"!show_my_map")==0){
 			if (!game_running) {
 				printf("Non posso, non sto giocando!\n");
 			} else {
+				print_map(map);
 			}
 			
 		}
