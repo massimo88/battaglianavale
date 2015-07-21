@@ -29,6 +29,8 @@ struct gestore {
 	pthread_t th;	
 	pthread_cond_t newrequest; //variabile condition
 	pthread_cond_t join;
+	pthread_cond_t resp_arrived;
+	char colpito;
 	int occupato;
 	pthread_mutex_t lock;
 	char map[COLS][COLS];
@@ -192,12 +194,14 @@ void server_disconnect(int fd,char* tokens[],int num_tokens,struct gestore*g){
 void server_hit(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	int err;
 	int peer_fd;
+	char resp[2];
 	char *rettoks[2]; // rettoks[0] contiene il retcode, rettoks[1] la mossa
 
 	if (num_tokens < 2) {
 		printf("hit richiede due argomenti\n");
 		return;
 	}
+
 
 	rettoks[0] = "OK";
 	rettoks[1] = tokens[1];
@@ -206,20 +210,42 @@ void server_hit(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	peer_fd = g->peer->fd;
 	pthread_mutex_unlock (&g->peer->lock);
 
-	//inoltro la mossa
+	//inoltro la mossa all'avversario
 	err=send_tokens(peer_fd, rettoks, 2);
 	if(err){
 		printf("Errore di trasmissione risposta\n");
 		return;
 	}
 
-	rettoks[1] = "";
-	//invio la risposta al chiamante
+	// aspetto il responso
+	pthread_mutex_lock (&g->lock);
+	pthread_cond_wait(&g->resp_arrived, &g->lock);
+	resp[0] = g->colpito;
+	resp[1] = '\0';
+	pthread_mutex_unlock (&g->lock);
+
+	rettoks[1] = resp;
+
+	//inoltro la risposta al chiamante
 	err=send_tokens(g->fd, rettoks, 2);
 	if(err){
 		printf("Errore di trasmissione risposta\n");
 		return;
 	}
+}
+
+void server_resp(int fd,char* tokens[],int num_tokens,struct gestore*g){
+
+	if (num_tokens < 2) {
+		printf("hit richiede due argomenti\n");
+		return;
+	}
+
+
+	pthread_mutex_lock (&g->peer->lock);
+	g->peer->colpito = tokens[1][0];
+	pthread_cond_signal(&g->peer->resp_arrived);
+	pthread_mutex_unlock (&g->peer->lock);
 }
 
 void gestisci_client_2(struct gestore*g){
@@ -292,6 +318,9 @@ void gestisci_client_2(struct gestore*g){
 		}
 		else if(strcmp(tokens[0],"!hit")==0){
 			server_hit(g->fd,tokens,k,g);
+		}
+		else if(strcmp(tokens[0],"!resp")==0){
+			server_resp(g->fd,tokens,k,g);
 		}
 		else{
 			printf("comando %s non esistente\n",tokens[0]);
@@ -378,6 +407,7 @@ int main(int argc, char* argv[]){
 		}
 		pthread_cond_init(&s.pool[i].newrequest, NULL);
 		pthread_cond_init(&s.pool[i].join, NULL);
+		pthread_cond_init(&s.pool[i].resp_arrived, NULL);
 		pthread_mutex_init(&s.pool[i].lock, NULL);//inizializzo il lock
 	}
 	

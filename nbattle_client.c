@@ -88,8 +88,12 @@ int read_response(int fd, char *buff, int len, char **resp)
 	int n=0;
 	int retcode;
 	n=read_message(fd,buff,len);
-	if(n<0){
-		printf("Errore ricezione risposta\n");
+	if(n<=0){
+		if (n == 0) {
+			printf("Peer ha chiuso connessione\n");
+		} else {
+			printf("Errore ricezione risposta\n");
+		}
 		return -1;
 	}
 	buff[n]='\0';//mette il terminatore alla stringa del msg ricevuto dal server
@@ -203,7 +207,8 @@ int leggi_coord(char *s, int *riga, int *colonna)
 int cmd_hit(int fd,char* tokens[],int num_tokens){
 	int retcode;
 	int riga, colonna;
-
+	char buff[MAX_BUFF_LEN+1];
+	char *resp;
 	if (num_tokens < 2) {
 		printf("Comando !hit richiede due argomenti\n");
 		return -1;
@@ -215,10 +220,22 @@ int cmd_hit(int fd,char* tokens[],int num_tokens){
 		return retcode;
 	}
 
-	retcode = cmd_common(fd,tokens,2);//ignora gli argomenti dopo il "!join"
-	if (retcode == 0) {
-		printf("Mossa inviata al server\n");
+	// manda la mossa al server
+	retcode = send_tokens(fd, tokens, 2);
+	if (retcode) {
+		return retcode;
 	}
+	// aspetta la risposta dell'avversario inoltrata dal server
+	// (COLPITO o MANCATO)
+	retcode = read_response(fd, buff, MAX_BUFF_LEN, &resp);
+
+	if (retcode == 0) {
+		printf("[OK]");
+		printf("AVVERSARIO DICE %s\n", resp);
+	} else {
+		printf("[FAIL]");
+	}
+
 	return retcode;
 }
 
@@ -521,6 +538,7 @@ int main(int argc, char*argv[]){
 			char buff[MAX_BUFF_LEN+1];
 			int retcode;
 			char *resp;
+			char *tokens[2];
 
 			retcode = read_response(fd, buff, MAX_BUFF_LEN, &resp);
 			if (retcode) {
@@ -528,7 +546,16 @@ int main(int argc, char*argv[]){
 				break;
 			}
 
-			printf("AVVERSARIO DICE %s\n", resp);
+			printf("AVVERSARIO SPARA SU %s\n", resp);
+
+			tokens[0] = "!resp";
+			tokens[1] = "MANCATO";
+
+			retcode = send_tokens(fd, tokens, 2);
+			if (retcode) {
+				printf("Errore durante invio responso\n");
+				break;
+			}
 
 			mio_turno = 1;
 		}
