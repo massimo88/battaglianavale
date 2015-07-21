@@ -581,34 +581,39 @@ int main(int argc, char*argv[]){
 				break;
 			}
 
-			printf("AVVERSARIO SPARA SU %s\n", resp);
-
-			tokens[0] = "!resp";
-			tokens[1] = "M";
-
-			retcode = leggi_coord(resp, &riga, &colonna);
-			if (retcode) {
-				printf("NOn può succedere\n");
-			} else {
-				if (map[riga][colonna] == 'X') {
-					tokens[1] = "C";
-					map[riga][colonna] = 'H';
-				} else {
-					map[riga][colonna] = 'o';
-				}
-			}
-
-			retcode = send_tokens(fd, tokens, 2);
-			if (retcode) {
-				printf("Errore durante invio responso\n");
-				break;
-			}
-
-			mio_turno = 1;
-
-			if (gioco_finito(map, num_X)) {
-				printf("Hai perso!\n");
+			if (strncmp(resp, "DD", 2) == 0) {
+				printf("L'avversario si è arreso! Hai vinto\n");
 				game_running = 0;
+			} else {
+				printf("AVVERSARIO SPARA SU '%s'\n", resp);
+
+				tokens[0] = "!resp";
+				tokens[1] = "M";
+
+				retcode = leggi_coord(resp, &riga, &colonna);
+				if (retcode) {
+					printf("NOn può succedere\n");
+				} else {
+					if (map[riga][colonna] == 'X') {
+						tokens[1] = "C";
+						map[riga][colonna] = 'H';
+					} else {
+						map[riga][colonna] = 'o';
+					}
+				}
+
+				retcode = send_tokens(fd, tokens, 2);
+				if (retcode) {
+					printf("Errore durante invio responso\n");
+					break;
+				}
+
+				mio_turno = 1;
+
+				if (gioco_finito(map, num_X)) {
+					printf("Hai perso!\n");
+					game_running = 0;
+				}
 			}
 		}
 	}

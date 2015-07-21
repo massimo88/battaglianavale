@@ -154,6 +154,7 @@ void server_disconnect(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	int err;
 	int must_surrender = 0;
 	struct gestore *peer = NULL;
+	int peer_fd =-1;
 	char *rettoks[2]; // rettoks[0] contiene il retcode, rettoks[1] un messaggio
 
 	rettoks[0] = "OK";
@@ -165,6 +166,9 @@ void server_disconnect(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	// !disconnect prima di me), o nello stato INIT, cosa che succede se il client
 	// ha fatto !quit mentre non era nello stato di gioco (disconnect simulata)
 	pthread_mutex_lock (&s.main_lock);
+	if (g->peer) {
+		peer_fd = g->peer->fd;
+	}
 	if (g->current_state == PLAYING) {
 		must_surrender = 1;
 		peer = g->peer;
@@ -179,12 +183,23 @@ void server_disconnect(int fd,char* tokens[],int num_tokens,struct gestore*g){
 
 	pthread_mutex_unlock (&s.main_lock);
 
-//invio la risposta
+	//invio la risposta al mio client
 	err=send_tokens(g->fd, rettoks, 2);
 	if(err){
 		printf("Errore di trasmissione risposta\n");
 		return;
 	}
+
+	if (peer_fd != -1) {
+		//avviso l'avversario che mi sono arreso
+		rettoks[1] = "DD";
+		err=send_tokens(peer_fd, rettoks, 2);
+		if(err){
+			printf("Errore di trasmissione avviso\n");
+			return;
+		}
+	}
+
 }
 
 void server_hit(int fd,char* tokens[],int num_tokens,struct gestore*g){
