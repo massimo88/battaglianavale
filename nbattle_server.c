@@ -32,7 +32,6 @@ struct gestore {
 	pthread_cond_t resp_arrived;
 	char colpito;
 	int occupato;
-	pthread_mutex_t lock;
 	char map[COLS][COLS];
 };
 
@@ -59,13 +58,13 @@ void server_who(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	cur+=n;
 	left-=n;
 //scorri i pool di thread per raccogliere i nomi(username)
+	pthread_mutex_lock (&s.main_lock);
 	for(i=0;i<NUM_THREADS && left>0;i++){
-		pthread_mutex_lock (&s.pool[i].lock);
 		n=snprintf(cur,left,"%s ", s.pool[i].username);
 		cur+=n;
 		left-=n;
-		pthread_mutex_unlock (&s.pool[i].lock);
 	}
+	pthread_mutex_unlock (&s.main_lock);
 //invio la risposta
 	err=send_message(g->fd,buf,MAX_BUFF_LEN-left);
 	if(err){
@@ -87,9 +86,9 @@ void server_join(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	if(num_tokens<2){
 		printf("server join request due argomenti\n");
 	} else {
+		pthread_mutex_lock (&s.main_lock);
 		//scorri i pool di thread per raccogliere i nomi(username)
 		for(i=0;i<NUM_THREADS && !found;i++){//quando ho trovato l'utente(quello che ha fatto create) mi fermo
-			pthread_mutex_lock (&s.pool[i].lock);
 			if (strcmp(s.pool[i].username,tokens[1])==0) {
 				username_found = 1;
 				peer_state = s.pool[i].current_state;
@@ -104,8 +103,8 @@ void server_join(int fd,char* tokens[],int num_tokens,struct gestore*g){
 				rettoks[0]="OK";
 			}
 		
-			pthread_mutex_unlock (&s.pool[i].lock);
 		}
+		pthread_mutex_unlock (&s.main_lock);
 	}	
 
 	if (!username_found) {
@@ -134,16 +133,14 @@ void server_create(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	char *cur = buf;
 	
 //il client chiede di creare una nuova partita, g si riferisce al thread gestore(client) corrente
-	pthread_mutex_lock (&g->lock);
+	pthread_mutex_lock (&s.main_lock);
 	g->current_state=WAIT_FOR_JOIN;
-	pthread_cond_wait(&g->join,&g->lock);//ho l indirizo della variabile condition, aspetto che accede qualcuno per giocare
-	pthread_mutex_unlock (&g->lock);
+	pthread_cond_wait(&g->join,&s.main_lock);//ho l indirizo della variabile condition, aspetto che accede qualcuno per giocare
 //ora accedo al peer
-	pthread_mutex_lock (&g->peer->lock);
 	n=snprintf(cur,left,"OK %s Si è unito alla partita\n",g->peer->username);
 	cur+=n;
 	left-=n; //serve per tenere traccia di quanto buffer mi è avanzato
-	pthread_mutex_unlock (&g->peer->lock);
+	pthread_mutex_unlock (&s.main_lock);
 	
 //invio la risposta
 	err=send_message(g->fd,buf,MAX_BUFF_LEN-left);
@@ -167,21 +164,20 @@ void server_disconnect(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	// sono nello stato PEER_SURRENDERED (cosa che succede se il peer ha fatto
 	// !disconnect prima di me), o nello stato INIT, cosa che succede se il client
 	// ha fatto !quit mentre non era nello stato di gioco (disconnect simulata)
-	pthread_mutex_lock (&g->lock);
+	pthread_mutex_lock (&s.main_lock);
 	if (g->current_state == PLAYING) {
 		must_surrender = 1;
 		peer = g->peer;
 		g->current_state = INIT;
 		g->peer = NULL;
 	}
-	pthread_mutex_unlock (&g->lock);
 
 	if (must_surrender) {
-		pthread_mutex_lock (&peer->lock);
 		peer->current_state = PEER_SURRENDERED;
 		peer->peer = NULL;
-		pthread_mutex_unlock (&peer->lock);
 	}
+
+	pthread_mutex_unlock (&s.main_lock);
 
 //invio la risposta
 	err=send_tokens(g->fd, rettoks, 2);
@@ -206,9 +202,9 @@ void server_hit(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	rettoks[0] = "OK";
 	rettoks[1] = tokens[1];
 
-	pthread_mutex_lock (&g->peer->lock);
+	pthread_mutex_lock (&s.main_lock);
 	peer_fd = g->peer->fd;
-	pthread_mutex_unlock (&g->peer->lock);
+	pthread_mutex_unlock (&s.main_lock);
 
 	//inoltro la mossa all'avversario
 	err=send_tokens(peer_fd, rettoks, 2);
@@ -218,11 +214,11 @@ void server_hit(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	}
 
 	// aspetto il responso
-	pthread_mutex_lock (&g->lock);
-	pthread_cond_wait(&g->resp_arrived, &g->lock);
+	pthread_mutex_lock (&s.main_lock);
+	pthread_cond_wait(&g->resp_arrived, &s.main_lock);
 	resp[0] = g->colpito;
 	resp[1] = '\0';
-	pthread_mutex_unlock (&g->lock);
+	pthread_mutex_unlock (&s.main_lock);
 
 	rettoks[1] = resp;
 
@@ -242,23 +238,27 @@ void server_resp(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	}
 
 
-	pthread_mutex_lock (&g->peer->lock);
+	pthread_mutex_lock (&s.main_lock);
 	g->peer->colpito = tokens[1][0];
 	pthread_cond_signal(&g->peer->resp_arrived);
-	pthread_mutex_unlock (&g->peer->lock);
+	pthread_mutex_unlock (&s.main_lock);
 }
 
 void gestisci_client_2(struct gestore*g){
+	char username[MAX_USERNAME_LEN+1];//+1 per dare spazio al terminatore
 	int n;
-	//legge l'username dal client
-	pthread_mutex_lock (&g->lock);
-	n=read_message(g->fd,g->username,MAX_USERNAME_LEN);		
+
+	n=read_message(g->fd,username,MAX_USERNAME_LEN);		
 	if(n<=0){
 		send_string(g->fd,"Errore durante lettura username");
 		return;
 	}
-	g->username[n]='\0';//metto il terminatore alla stringa username
-	pthread_mutex_unlock (&g->lock);
+	username[n]='\0';//metto il terminatore alla stringa username
+
+	//legge l'username dal client
+	pthread_mutex_lock (&s.main_lock);
+	memcpy(g->username, username, MAX_USERNAME_LEN+1);
+	pthread_mutex_unlock (&s.main_lock);
 	printf("Gestisco la connessione con %s\n",g->username);
 	
 	for(;;){
@@ -329,11 +329,11 @@ void gestisci_client_2(struct gestore*g){
 		printf("%s\n",cmd_buf);
 	}
 	printf("Ho gestito la connessione con %s\n",g->username);
-	pthread_mutex_lock (&g->lock);
+	pthread_mutex_lock (&s.main_lock);
 	g->username[0] = '\0';
 	g->current_state = INIT;
 	memset(g->map, '-', COLS * COLS);
-	pthread_mutex_unlock (&g->lock);
+	pthread_mutex_unlock (&s.main_lock);
 } 
 
 void * gestisci_client(void *arg){
@@ -408,7 +408,6 @@ int main(int argc, char* argv[]){
 		pthread_cond_init(&s.pool[i].newrequest, NULL);
 		pthread_cond_init(&s.pool[i].join, NULL);
 		pthread_cond_init(&s.pool[i].resp_arrived, NULL);
-		pthread_mutex_init(&s.pool[i].lock, NULL);//inizializzo il lock
 	}
 	
 	//lo scopo del socket è di ascoltare connessioni dei client
