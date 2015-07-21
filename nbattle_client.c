@@ -175,6 +175,29 @@ int cmd_disconnect(int fd,char* tokens[],int num_tokens){
 	return retcode;
 }
 
+int get_username(int fd){
+	size_t nchars = 0; //variabile che fa parte del funzionamento della getline
+	char *line = NULL; //stringa che contiene i caratteri della linea
+	int n;//conterrà il numero delle lettere inserite da tastiera nella linea
+	//inserimento username
+	printf("Inserisci il tuo nome:");
+	n=getline(&line,&nchars,stdin);//stdin file che rappresenta lo standardinput
+	if(n<0){
+		perror("getline()");
+		return -1;
+	}
+	
+	if(strcmp(line,"\n")==0){
+		printf("Il nome non può essere vuoto\n");
+		return -1;
+	}
+	
+//-1 cosi nn includo il \n	
+	send_message(fd,line,n-1);
+	
+	return 0;	
+}
+
 int leggi_mappa(char map[COLS][COLS])
 {
 	int i, j;
@@ -223,9 +246,9 @@ int leggi_mappa(char map[COLS][COLS])
 			}
 			line[n-1]='\0';
 
-			if (strcmp(line, "ORIZZONTALE") == 0) {
+			if (strcmp(line, "O") == 0) {
 				orizzontale = 1;
-			} else if (strcmp(line, "VERTICALE") == 0) {
+			} else if (strcmp(line, "V") == 0) {
 				orizzontale = 0;
 			} else {
 				printf("Orientamento non valido\n");
@@ -267,28 +290,6 @@ int leggi_mappa(char map[COLS][COLS])
 	return 0;
 }
 
-int get_username(int fd){
-	size_t nchars = 0; //variabile che fa parte del funzionamento della getline
-	char *line = NULL; //stringa che contiene i caratteri della linea
-	int n;//conterrà il numero delle lettere inserite da tastiera nella linea
-	//inserimento username
-	printf("Inserisci il tuo nome:");
-	n=getline(&line,&nchars,stdin);//stdin file che rappresenta lo standardinput
-	if(n<0){
-		perror("getline()");
-		return -1;
-	}
-	
-	if(strcmp(line,"\n")==0){
-		printf("Il nome non può essere vuoto\n");
-		return -1;
-	}
-	
-//-1 cosi nn includo il \n	
-	send_message(fd,line,n-1);
-	
-	return 0;	
-}
 int main(int argc, char*argv[]){
 	
 	//struct per il bind 
@@ -335,10 +336,6 @@ int main(int argc, char*argv[]){
 		return -1;//xke devo uscire dal programma
 	}
 	
-	memset(map, '-', COLS * COLS);
-	leggi_mappa(map);
-	print_map(map);
-
 	print_help();			
 	
 	err=get_username(fd);
@@ -346,6 +343,7 @@ int main(int argc, char*argv[]){
 		printf("Errore durante inserimento username\n");
 		return -1;
 	}
+		
 //loop ingresso comandidello standard input inviati al server
 	for(;;){
 		size_t nchars;//conterrà il numero delle lettere inserite da tastiera nella linea
@@ -403,6 +401,9 @@ int main(int argc, char*argv[]){
 				if (retcode == 0) {
 					// passo in modalità di gioco
 					game_running = 1;
+					memset(map, '-', COLS * COLS);
+					leggi_mappa(map);
+					print_map(map);
 				}
 			}
 		}
@@ -417,6 +418,9 @@ int main(int argc, char*argv[]){
 				if (retcode == 0) {
 					// passo in modalità di gioco
 					game_running = 1;
+					memset(map, '-', COLS * COLS);
+					leggi_mappa(map);
+					print_map(map);
 				}
 			}
 		}
