@@ -17,7 +17,7 @@ int read_message(int fd, void* buff,size_t len){
 		if (n < 0) {
 			perror("Errore ricezione lunghezza\n");
 		} else if (n == 0) {
-			printf("Il client ha chiuso la connessione\n");
+			printf("Il peer ha chiuso la connessione\n");
 		}
 		return n;
 	}
@@ -32,7 +32,7 @@ int read_message(int fd, void* buff,size_t len){
 		if (n < 0) {
 			perror("Errore ricezione messaggio\n");
 		} else if (n == 0) {
-			printf("Il client ha chiuso la connessione\n");
+			printf("Il peer ha chiuso la connessione\n");
 		}
 		return n;
 	}

@@ -40,10 +40,6 @@ struct specifica_navi specifica[] = {
 		.num = 1,
 		.dimensione = 4,
 	},
-	{
-		.num = 1,
-		.dimensione = 3,
-	},
 };
 void usage (void){
 	printf("	nbattle_client <host remoto> <porta>\n");
@@ -86,20 +82,12 @@ void print_map(char map[COLS][COLS])
 	printf("\n");
 }
 
-//funzione comune per spedire un comando
-int cmd_common(int fd,char* tokens[],int num_tokens){
-	int err;
-	int n=0;
-	char buff[MAX_BUFF_LEN+1];
+int read_response(int fd, char *buff, int len, char **resp)
+{
 	char *first_space;
+	int n=0;
 	int retcode;
-
-	err = send_tokens(fd, tokens, num_tokens);
-	if (err) {
-		return err;
-	}
-
-	n=read_message(fd,buff,sizeof(buff));
+	n=read_message(fd,buff,len);
 	if(n<0){
 		printf("Errore ricezione risposta\n");
 		return -1;
@@ -117,12 +105,31 @@ int cmd_common(int fd,char* tokens[],int num_tokens){
 
 	retcode = (strncmp(buff, "OK", 2) == 0) ? 0 : 1;
 
+	*resp = first_space +1;
+
+	return retcode;
+}
+
+//funzione comune per spedire un comando
+int cmd_common(int fd,char* tokens[],int num_tokens){
+	int err;
+	char buff[MAX_BUFF_LEN+1];
+	char *resp;
+	int retcode;
+
+	err = send_tokens(fd, tokens, num_tokens);
+	if (err) {
+		return err;
+	}
+
+	retcode = read_response(fd, buff, MAX_BUFF_LEN, &resp);
+
 	if (retcode == 0) {
 		printf("[OK]");
 	} else {
 		printf("[FAIL]");
 	}
-	printf("%s\n", first_space + 1);
+	printf("%s\n", resp);
 
 	return retcode;
 }
@@ -175,6 +182,46 @@ int cmd_disconnect(int fd,char* tokens[],int num_tokens){
 	return retcode;
 }
 
+
+int leggi_coord(char *s, int *riga, int *colonna)
+{
+	if (strlen(s) < 2 || s[0] <'A' || s[0] > 'A'+COLS-1) {
+		printf("Coordinate non valide\n");
+		return -1;
+	}
+	*colonna = s[0] -'A';
+	*riga = atoi(s+1);
+	(*riga)--;
+	if (*riga < 0 || *riga >= COLS) {
+		printf("Coordinate non valide\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+int cmd_hit(int fd,char* tokens[],int num_tokens){
+	int retcode;
+	int riga, colonna;
+
+	if (num_tokens < 2) {
+		printf("Comando !hit richiede due argomenti\n");
+		return -1;
+	}
+
+	// validiamo le coordinate inserite dall'utente
+	retcode = leggi_coord(tokens[1], &riga, &colonna);
+	if (retcode) {
+		return retcode;
+	}
+
+	retcode = cmd_common(fd,tokens,2);//ignora gli argomenti dopo il "!join"
+	if (retcode == 0) {
+		printf("Mossa inviata al server\n");
+	}
+	return retcode;
+}
+
 int get_username(int fd){
 	size_t nchars = 0; //variabile che fa parte del funzionamento della getline
 	char *line = NULL; //stringa che contiene i caratteri della linea
@@ -197,7 +244,6 @@ int get_username(int fd){
 	
 	return 0;	
 }
-
 int leggi_mappa(char map[COLS][COLS])
 {
 	int i, j;
@@ -213,6 +259,7 @@ int leggi_mappa(char map[COLS][COLS])
 			int colonna;
 			int k;
 			int overlap = 0;
+			int err;
 			printf("Inserisci le coordinate della %da nave di dimensione %d: ",
 				j+1, specifica[i].dimensione);
 			n=getline(&line,&nchars,stdin);
@@ -221,20 +268,11 @@ int leggi_mappa(char map[COLS][COLS])
 				return -1;
 			}
 			line[n-1]='\0';
-			if (strlen(line) < 2 || line[0] <'A' || line[0] > 'A'+COLS-1) {
-				printf("Coordinate non valide\n");
-				free(line);
-				continue;
-			}
-			colonna = line[0] -'A';
-			riga = atoi(line +1);
-			riga--;
-			if (riga < 0 || riga >= COLS) {
-				printf("Coordinate non valide\n");
-				free(line);
-				continue;
-			}
+			err = leggi_coord(line, &riga, &colonna);
 			free(line);
+			if (err) {
+				continue;
+			}
 
 			line = NULL;
 			printf("Inserisci l'orientamento della %da nave di dimensione %d: ",
@@ -299,7 +337,9 @@ int main(int argc, char*argv[]){
 	int port;
 	int i;
 	int game_running=0;// variabile booleana che indica se siamo nella fase di gioco o di contrattazione
+	int mio_turno=0; // è il mio turno o quello dell'avversario ?
 	char map[COLS][COLS];
+	char peer_map[COLS][COLS];
 	//gestione argomenti linea di comando
 	if (argc!=3){
 		printf("Sono richiesti due argomenti\n");
@@ -343,8 +383,12 @@ int main(int argc, char*argv[]){
 		printf("Errore durante inserimento username\n");
 		return -1;
 	}
-		
-//loop ingresso comandidello standard input inviati al server
+
+	memset(map, '-', COLS * COLS);
+	memset(peer_map, '-', COLS * COLS);
+	print_map(map);
+
+	//loop ingresso comandidello standard input inviati al server
 	for(;;){
 		size_t nchars;//conterrà il numero delle lettere inserite da tastiera nella linea
 		char *line = NULL; //stringa che contiene i caratteri della linea
@@ -404,6 +448,7 @@ int main(int argc, char*argv[]){
 					memset(map, '-', COLS * COLS);
 					leggi_mappa(map);
 					print_map(map);
+					mio_turno = 1;
 				}
 			}
 		}
@@ -421,6 +466,7 @@ int main(int argc, char*argv[]){
 					memset(map, '-', COLS * COLS);
 					leggi_mappa(map);
 					print_map(map);
+					mio_turno = 0;
 				}
 			}
 		}
@@ -443,7 +489,7 @@ int main(int argc, char*argv[]){
 			if (!game_running) {
 				printf("Non posso, non sto giocando!\n");
 			} else {
-				print_map(map);
+				print_map(peer_map);
 			}
 		}
 		else if(strcmp(tokens[0],"!show_my_map")==0){
@@ -458,6 +504,8 @@ int main(int argc, char*argv[]){
 			if (!game_running) {
 				printf("Non posso, non sto giocando!\n");
 			} else {
+				cmd_hit(fd,tokens,k);
+				mio_turno = 0;			
 			}
 			
 		}
@@ -465,6 +513,25 @@ int main(int argc, char*argv[]){
 			printf("comando %s non esistente\n",tokens[0]);
 		}
 		free(line);
+
+		if (game_running && !mio_turno) {
+			// siamo in fase di gioco, ma non è il mio turno, quindi
+			// devo aspettare che il server mi inoltri il la mossa
+			// dell'avversario
+			char buff[MAX_BUFF_LEN+1];
+			int retcode;
+			char *resp;
+
+			retcode = read_response(fd, buff, MAX_BUFF_LEN, &resp);
+			if (retcode) {
+				printf("Errore durante ricezione mossa avversaria\n");
+				break;
+			}
+
+			printf("AVVERSARIO DICE %s\n", resp);
+
+			mio_turno = 1;
+		}
 	}
 //anche se nn lo scrivo, la close la fa da solo
 	close(fd);

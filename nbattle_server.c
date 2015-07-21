@@ -95,6 +95,7 @@ void server_join(int fd,char* tokens[],int num_tokens,struct gestore*g){
 
 			if(strcmp(s.pool[i].username,tokens[1])==0 && s.pool[i].current_state == WAIT_FOR_JOIN){ //controllo se è disponibile
 				s.pool[i].peer=g; //collego me stesso al peer che ho scelto
+				g->peer = &s.pool[i];
 				s.pool[i].current_state = PLAYING;
 				pthread_cond_signal(&s.pool[i].join);
 				found=1;
@@ -188,6 +189,39 @@ void server_disconnect(int fd,char* tokens[],int num_tokens,struct gestore*g){
 	}
 }
 
+void server_hit(int fd,char* tokens[],int num_tokens,struct gestore*g){
+	int err;
+	int peer_fd;
+	char *rettoks[2]; // rettoks[0] contiene il retcode, rettoks[1] la mossa
+
+	if (num_tokens < 2) {
+		printf("hit richiede due argomenti\n");
+		return;
+	}
+
+	rettoks[0] = "OK";
+	rettoks[1] = tokens[1];
+
+	pthread_mutex_lock (&g->peer->lock);
+	peer_fd = g->peer->fd;
+	pthread_mutex_unlock (&g->peer->lock);
+
+	//inoltro la mossa
+	err=send_tokens(peer_fd, rettoks, 2);
+	if(err){
+		printf("Errore di trasmissione risposta\n");
+		return;
+	}
+
+	rettoks[1] = "";
+	//invio la risposta al chiamante
+	err=send_tokens(g->fd, rettoks, 2);
+	if(err){
+		printf("Errore di trasmissione risposta\n");
+		return;
+	}
+}
+
 void gestisci_client_2(struct gestore*g){
 	int n;
 	//legge l'username dal client
@@ -248,16 +282,16 @@ void gestisci_client_2(struct gestore*g){
 			server_disconnect(g->fd,tokens,k,g);
 		}
 		else if(strcmp(tokens[0],"!quit")==0){
-			
+			// TODO remove
 		}
 		else if(strcmp(tokens[0],"!show_enemy_map")==0){
-			
+			// TODO remove
 		}
 		else if(strcmp(tokens[0],"!show_my_map")==0){
-			
+			// TODO remove	
 		}
 		else if(strcmp(tokens[0],"!hit")==0){
-			
+			server_hit(g->fd,tokens,k,g);
 		}
 		else{
 			printf("comando %s non esistente\n",tokens[0]);
