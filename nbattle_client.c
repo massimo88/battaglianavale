@@ -204,7 +204,7 @@ int leggi_coord(char *s, int *riga, int *colonna)
 	return 0;
 }
 
-int cmd_hit(int fd,char* tokens[],int num_tokens){
+int cmd_hit(int fd,char* tokens[],int num_tokens, char peer_map[COLS][COLS]){
 	int retcode;
 	int riga, colonna;
 	char buff[MAX_BUFF_LEN+1];
@@ -232,6 +232,11 @@ int cmd_hit(int fd,char* tokens[],int num_tokens){
 	if (retcode == 0) {
 		printf("[OK]");
 		printf("AVVERSARIO DICE %s\n", resp);
+		if (resp[0] == 'C') {
+			peer_map[riga][colonna] = 'H';
+		} else if (resp[0] == 'M') {
+			peer_map[riga][colonna] = 'o';
+		}
 	} else {
 		printf("[FAIL]");
 	}
@@ -521,7 +526,7 @@ int main(int argc, char*argv[]){
 			if (!game_running) {
 				printf("Non posso, non sto giocando!\n");
 			} else {
-				cmd_hit(fd,tokens,k);
+				cmd_hit(fd,tokens,k, peer_map);
 				mio_turno = 0;			
 			}
 			
@@ -538,6 +543,7 @@ int main(int argc, char*argv[]){
 			char buff[MAX_BUFF_LEN+1];
 			int retcode;
 			char *resp;
+			int riga, colonna;
 			char *tokens[2];
 
 			retcode = read_response(fd, buff, MAX_BUFF_LEN, &resp);
@@ -549,7 +555,19 @@ int main(int argc, char*argv[]){
 			printf("AVVERSARIO SPARA SU %s\n", resp);
 
 			tokens[0] = "!resp";
-			tokens[1] = "MANCATO";
+			tokens[1] = "M";
+
+			retcode = leggi_coord(resp, &riga, &colonna);
+			if (retcode) {
+				printf("NOn può succedere\n");
+			} else {
+				if (map[riga][colonna] == 'X') {
+					tokens[1] = "C";
+					map[riga][colonna] = 'H';
+				} else {
+					map[riga][colonna] = 'o';
+				}
+			}
 
 			retcode = send_tokens(fd, tokens, 2);
 			if (retcode) {
