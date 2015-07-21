@@ -82,6 +82,20 @@ void print_map(char map[COLS][COLS])
 	printf("\n");
 }
 
+int gioco_finito(char m[COLS][COLS], int num_X)
+{
+	int i,j;
+	int num_H = 0;
+	for (i=0;i<COLS;i++){
+		for (j=0;j<COLS;j++) {
+			if (m[i][j] == 'H')
+				num_H++;
+		}
+	}
+
+	return num_X == num_H;
+}
+
 int read_response(int fd, char *buff, int len, char **resp)
 {
 	char *first_space;
@@ -362,6 +376,7 @@ int main(int argc, char*argv[]){
 	int mio_turno=0; // è il mio turno o quello dell'avversario ?
 	char map[COLS][COLS];
 	char peer_map[COLS][COLS];
+	int num_X;
 	//gestione argomenti linea di comando
 	if (argc!=3){
 		printf("Sono richiesti due argomenti\n");
@@ -409,6 +424,16 @@ int main(int argc, char*argv[]){
 	memset(map, '-', COLS * COLS);
 	memset(peer_map, '-', COLS * COLS);
 	print_map(map);
+
+	// calcola num_X
+	num_X = 0;
+	{
+		int i;
+		for (i=0; i<sizeof(specifica)/sizeof(struct specifica_navi);i++) {
+			num_X += specifica[i].dimensione * specifica[i].num;
+		}
+	}
+	printf("Numero totale di X = %d\n", num_X);
 
 	//loop ingresso comandidello standard input inviati al server
 	for(;;){
@@ -527,7 +552,11 @@ int main(int argc, char*argv[]){
 				printf("Non posso, non sto giocando!\n");
 			} else {
 				cmd_hit(fd,tokens,k, peer_map);
-				mio_turno = 0;			
+				mio_turno = 0;		
+				if (gioco_finito(peer_map, num_X)) {
+					printf("Hai vinto!\n");
+					game_running = 0;
+				}
 			}
 			
 		}
@@ -576,6 +605,11 @@ int main(int argc, char*argv[]){
 			}
 
 			mio_turno = 1;
+
+			if (gioco_finito(map, num_X)) {
+				printf("Hai perso!\n");
+				game_running = 0;
+			}
 		}
 	}
 //anche se nn lo scrivo, la close la fa da solo
